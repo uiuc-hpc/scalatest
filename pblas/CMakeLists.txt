@@ -1,11 +1,54 @@
-set (PblasErrorHandler  PB_Cwarn.c PB_Cabort.c)
-set (pbtcom pblastst.f ${PblasErrorHandler})
-set (spbtcom psblastst.f slamch.f ${pbtcom})
-set (dpbtcom pdblastst.f dlamch.f ${pbtcom})
-set (cpbtcom pcblastst.f slamch.f ${pbtcom})
-set (zpbtcom pzblastst.f dlamch.f ${pbtcom})
-
+include(ScaLATESTSources)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${SCALATEST_BINARY_DIR}/tests)
+
+function(add_pblas_library NAME)
+  cmake_parse_arguments(${NAME} "" "" "SOURCES" ${ARGN})
+  foreach(PRECISION IN ITEMS s d c z)
+    add_library(${PRECISION}${NAME} OBJECT)
+    scalatest_sources(${PRECISION}${NAME} ${PRECISION} ${${NAME}_SOURCES})
+  endforeach()
+endfunction()
+
+function(add_pblas_executable_precision NAME PRECISION)
+  set(multiValueArgs SOURCES LIBRARIES NOPREFIX_LIBRARIES NOCMPLX_LIBRARIES)
+  cmake_parse_arguments(${NAME} "" "" "${multiValueArgs}" ${ARGN})
+  add_executable(${PRECISION}${NAME})
+  scalatest_sources(${PRECISION}${NAME} ${PRECISION} ${${NAME}_SOURCES})
+  scalatest_link_libraries(${PRECISION}${NAME} ${PRECISION} ${${NAME}_LIBRARIES})
+  if(PRECISION STREQUAL "c")
+    scalatest_link_libraries(${PRECISION}${NAME} "s" ${${NAME}_NOCMPLX_LIBRARIES})
+  elseif(PRECISION STREQUAL "z")
+    scalatest_link_libraries(${PRECISION}${NAME} "d" ${${NAME}_NOCMPLX_LIBRARIES})
+  else()
+    scalatest_link_libraries(${PRECISION}${NAME} ${PRECISION} ${${NAME}_NOCMPLX_LIBRARIES})
+  endif()
+  target_link_libraries(${PRECISION}${NAME} PRIVATE
+    MPI::MPI_Fortran
+    ${ScaLAPACK_LIBRARIES}
+    ${${NAME}_NOPREFIX_LIBRARIES}
+  )
+endfunction()
+
+function(add_pblas_executable NAME)
+  foreach(PRECISION IN ITEMS s d c z)
+    add_pblas_executable_precision(${NAME} ${PRECISION} ${ARGN})
+  endforeach()
+endfunction()
+
+add_library(PblasErrorHandler OBJECT PB_Cwarn.c PB_Cabort.c)
+add_library(_pbtcom OBJECT pblastst.f)
+add_library(slamch OBJECT slamch.f)
+add_library(dlamch OBJECT dlamch.f)
+add_pblas_library(pbtcom SOURCES blastst.f)
+
+foreach(LVL IN ITEMS 1 2 3)
+  add_pblas_executable("pb${LVL}tst"
+    SOURCES "blas${LVL}tst.f"
+    LIBRARIES pbtcom
+    NOCMPLX_LIBRARIES lamch
+    NOPREFIX_LIBRARIES _pbtcom PblasErrorHandler
+  )
+endforeach()
 
 file(COPY PCBLAS1TST.dat DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 file(COPY PCBLAS2TST.dat DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
@@ -19,53 +62,3 @@ file(COPY PSBLAS3TST.dat DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 file(COPY PZBLAS1TST.dat DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 file(COPY PZBLAS2TST.dat DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 file(COPY PZBLAS3TST.dat DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-
-
-add_executable(spb1tst psblas1tst.f ${spbtcom})
-add_executable(dpb1tst pdblas1tst.f ${dpbtcom})
-add_executable(cpb1tst pcblas1tst.f ${cpbtcom})
-add_executable(zpb1tst pzblas1tst.f ${zpbtcom})
-
-add_executable(spb2tst psblas2tst.f ${spbtcom})
-add_executable(dpb2tst pdblas2tst.f ${dpbtcom})
-add_executable(cpb2tst pcblas2tst.f ${cpbtcom})
-add_executable(zpb2tst pzblas2tst.f ${zpbtcom})
-
-add_executable(spb3tst psblas3tst.f ${spbtcom})
-add_executable(dpb3tst pdblas3tst.f ${dpbtcom})
-add_executable(cpb3tst pcblas3tst.f ${cpbtcom})
-add_executable(zpb3tst pzblas3tst.f ${zpbtcom})
-
-target_link_libraries(spb1tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(dpb1tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(cpb1tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(zpb1tst ${ScaLAPACK_LIBRARIES})
-
-target_link_libraries(spb2tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(dpb2tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(cpb2tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(zpb2tst ${ScaLAPACK_LIBRARIES})
-
-target_link_libraries(spb3tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(dpb3tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(cpb3tst ${ScaLAPACK_LIBRARIES})
-target_link_libraries(zpb3tst ${ScaLAPACK_LIBRARIES})
-
-add_test(spb1tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./spb1tst)
-add_test(dpb1tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./dpb1tst)
-add_test(cpb1tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./cpb1tst)
-add_test(zpb1tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./zpb1tst)
-
-add_test(spb2tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./spb2tst)
-add_test(dpb2tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./dpb2tst)
-add_test(cpb2tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./cpb2tst)
-add_test(zpb2tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./zpb2tst)
-
-add_test(spb3tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./spb3tst)
-add_test(dpb3tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./dpb3tst)
-add_test(cpb3tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./cpb3tst)
-add_test(zpb3tst ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 4 ./zpb3tst)
-
-if ("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
-    set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=legacy" )  # local to this directory
-endif()
